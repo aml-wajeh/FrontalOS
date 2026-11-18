@@ -1,0 +1,106 @@
+@import "../../../../packages/design-tokens/tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Marketing/landing styles. Portal-specific themes (Patient / Parent /
+  Clinical) still live outside this file — this covers the public site only.
+*/
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+::selection {
+  background-color: var(--color-secondary-light);
+  color: var(--color-primary-dark);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-secondary);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------
+   Elevation pass utilities — shared glass / depth / grain treatments used
+   across the marketing site and all four portals. Every value here is
+   sourced from the tokens above (no new hues introduced), so the
+   60-30-10 and no-neons rules in brand_color_palette.md still hold.
+   ------------------------------------------------------------------- */
+
+.glass-dark {
+  background: var(--glass-dark-bg);
+  border: 1px solid var(--glass-dark-border);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+
+.glass-light {
+  background: var(--glass-light-bg);
+  border: 1px solid var(--glass-light-border);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+
+.mesh-dark {
+  background-image: var(--gradient-mesh-dark);
+}
+
+.mesh-light {
+  background-image: var(--gradient-mesh-light);
+}
+
+/* Ultra-subtle film-grain overlay for large dark hero/chrome surfaces —
+   breaks up flat gradient banding without adding visual noise/clutter. */
+.grain-overlay {
+  position: relative;
+  isolation: isolate;
+}
+.grain-overlay::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Slim, quiet scrollbar for dashboard scroll regions. */
+.scroll-quiet {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(27, 35, 64, 0.18) transparent;
+}
+.scroll-quiet::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-quiet::-webkit-scrollbar-thumb {
+  background-color: rgba(27, 35, 64, 0.18);
+  border-radius: 999px;
+}
+.scroll-quiet::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grain-overlay::after {
+    display: none;
+  }
+}

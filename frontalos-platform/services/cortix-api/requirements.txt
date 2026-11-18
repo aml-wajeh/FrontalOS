@@ -1,0 +1,41 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+sqlalchemy==2.0.32
+psycopg2-binary==2.9.9
+alembic==1.13.2
+pydantic[email]==2.9.1
+# core/security.py does `import jwt` and calls jwt.encode / jwt.decode /
+# jwt.ExpiredSignatureError / jwt.InvalidTokenError — that's PyJWT's API
+# (import name `jwt`), not python-jose's (import name `jose`). Both used
+# to be listed, which meant only python-jose was actually installed and
+# `import jwt` failed at process start with ModuleNotFoundError, taking
+# every route (and the entire pytest suite, since tests/conftest.py does
+# `import main`) down with it. PyJWT is what the code actually calls.
+PyJWT==2.9.0
+passlib[bcrypt]==1.7.4
+# Pinned: passlib 1.7.4's bcrypt self-test breaks on bcrypt>=4.1 (which
+# dropped the `__about__` attribute passlib probes for). Pin below 4.1
+# until passlib ships a fix, or this will raise on the very first hash.
+bcrypt==4.0.1
+python-multipart==0.0.9
+
+# AI / ML — Model 1 (tabular / XGBoost) and Model 2 (imaging / Keras CNN).
+# These are only imported lazily inside core/ai/*_service.py when a real
+# weight file is found on disk, so "demo" mode works even in environments
+# where these heavy packages aren't installed yet.
+numpy==1.26.4
+scipy==1.13.1
+scikit-learn==1.5.1
+xgboost==2.1.1
+tensorflow==2.17.0
+pydicom==2.4.4
+nibabel==5.2.1
+Pillow==10.4.0
+
+# Reports
+reportlab==4.2.2
+matplotlib==3.9.2
+
+# Testing (tests/ — see tests/conftest.py)
+pytest==8.3.2
+httpx==0.27.2

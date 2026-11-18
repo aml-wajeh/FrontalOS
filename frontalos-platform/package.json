@@ -1,0 +1,18 @@
+{
+  "name": "frontalos-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FrontalOS — ADHD digital therapeutics platform monorepo (foundation build).",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=apps/web",
+    "build:web": "npm run build --workspace=apps/web",
+    "lint:web": "npm run lint --workspace=apps/web"
+  },
+  "engines": {
+    "node": ">=18.18.0"
+  }
+}

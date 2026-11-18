@@ -1,0 +1,12 @@
+{
+  "name": "@frontalos/design-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Single source of truth for FrontalOS brand colors (parsed from brand_color_palette.md). Consumed by apps/web via workspace alias.",
+  "main": "tailwind.tokens.js",
+  "files": [
+    "tokens.json",
+    "tailwind.tokens.js",
+    "tokens.css"
+  ]
+}

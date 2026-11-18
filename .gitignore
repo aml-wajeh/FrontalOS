@@ -1,0 +1,41 @@
+# Datasets (too large; DAiSEE must be obtained from its official source)
+FrontalOS_Engine/DataSet/
+datasets/**/*.mp4
+*.avi
+
+# Not part of this repository
+CORTIX/
+*.pdf
+*.png
+NEW_PROJECT_PROMPT.md
+FRONTALOS_CV_BRIEF.md
+services/cortix-api/models/*.pkl
+frontalos-platform/services/cortix-api/models/*.pkl
+frontalos-platform/services/frontalos-engine/reference/**/*.pth
+
+# Secrets
+.env
+.env.local
+!.env.example
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.db
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+dist/
+*.tsbuildinfo
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

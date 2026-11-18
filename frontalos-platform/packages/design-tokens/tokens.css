@@ -1,0 +1,68 @@
+/*
+ * packages/design-tokens/tokens.css
+ *
+ * CSS custom properties generated from tokens.json / brand_color_palette.md.
+ * Import this once (e.g. in apps/web/src/app/globals.css) for any styling
+ * that happens outside Tailwind (raw CSS, SVG fills, canvas/chart libs).
+ *
+ * 60-30-10 rule: ~60% var(--color-canvas)/var(--color-surface),
+ * ~30% var(--color-primary), ~10% var(--color-secondary) / var(--color-accent).
+ * No-neons rule: this file is the only place brand hex values should be
+ * defined — do not hardcode a different red/yellow/etc. elsewhere.
+ */
+
+:root {
+  /* Core brand palette (60-30-10) */
+  --color-primary: #1b2340;       /* Deep Navy Blue — 60% Dominant */
+  --color-primary-dark: #10172a;  /* Primary Dark tint */
+  --color-primary-soft: #2c375c;  /* Primary Soft Tint — hover state */
+
+  --color-secondary: #00c2a8;       /* Calming Teal — 30% Support */
+  --color-secondary-light: #e6f9f6; /* Teal Light / Subtle */
+
+  --color-accent: #f4a261;      /* Soft Amber Coral — 10% Highlight */
+  --color-accent-soft: #fdf0e6; /* Amber Soft Tint */
+
+  /* Neutrals & backgrounds */
+  --color-ink: #10172a;    /* Slate Ink — body text */
+  --color-surface: #ffffff; /* Pure White — card surface */
+  --color-canvas: #f5f7fb;  /* Cloud White — app canvas background */
+  --color-muted: #6b7280;   /* Muted Grey — captions, subtext */
+
+  /* Semantic aliases */
+  --color-success-bg: #e6f9f6; /* alias of --color-secondary-light */
+  --color-alert-bg: #fdf0e6;   /* alias of --color-accent-soft */
+
+  /* Danger/destructive — deliberately desaturated terracotta, never a
+     saturated fire-red, per the no-neons rule (brand_color_palette.md §5). */
+  --color-danger: #b3483d;
+  --color-danger-soft: #f6e8e6;
+  --color-danger-on-dark: #e2a79e;
+  --color-danger-on-dark-bg: rgba(226, 167, 158, 0.08);
+
+  /* Chart color map (Plotly / Recharts series) */
+  --chart-focus: #00c2a8;
+  --chart-sleep: #1b2340;
+  --chart-screen-time: #f4a261;
+  --chart-urban: #1b2340;
+  --chart-rural: #f4a261;
+
+  /* Elevation pass: glass/glow tokens layered on top of the existing
+     60-30-10 palette above. These never introduce a new hue — every value
+     here is an alpha/blur variant of primary/secondary/accent so the
+     no-neons + WCAG-contrast rules in brand_color_palette.md still hold. */
+  --glass-dark-bg: rgba(27, 35, 64, 0.55);
+  --glass-dark-border: rgba(255, 255, 255, 0.08);
+  --glass-light-bg: rgba(255, 255, 255, 0.72);
+  --glass-light-border: rgba(27, 35, 64, 0.06);
+  --glow-teal: 0 0 0 1px rgba(0, 194, 168, 0.16), 0 12px 32px -12px rgba(0, 194, 168, 0.35);
+  --glow-amber: 0 0 0 1px rgba(244, 162, 97, 0.16), 0 12px 32px -12px rgba(244, 162, 97, 0.35);
+  --glow-navy: 0 0 0 1px rgba(27, 35, 64, 0.08), 0 20px 40px -20px rgba(16, 23, 42, 0.35);
+  --gradient-mesh-dark:
+    radial-gradient(50% 40% at 10% 0%, rgba(0, 194, 168, 0.14), transparent 70%),
+    radial-gradient(40% 35% at 95% 15%, rgba(244, 162, 97, 0.1), transparent 70%),
+    radial-gradient(60% 50% at 50% 100%, rgba(44, 55, 92, 0.5), transparent 70%);
+  --gradient-mesh-light:
+    radial-gradient(45% 35% at 100% 0%, rgba(0, 194, 168, 0.08), transparent 70%),
+    radial-gradient(40% 30% at 0% 100%, rgba(244, 162, 97, 0.06), transparent 70%);
+}

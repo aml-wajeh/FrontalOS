@@ -1,0 +1,131 @@
+# =============================================================================
+# FrontalOS Platform — docker-compose
+# =============================================================================
+# `docker compose up --build` brings up the whole platform: web, cortix-api,
+# frontalos-engine, postgres, redis, and an nginx entry point on :80.
+# See docs/RUNBOOK.md for prerequisites, first-run steps, and troubleshooting.
+#
+# All ${VARS} below are read from a root .env file — `cp .env.example .env`
+# first (docker compose loads .env from the project root automatically).
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_CORTIX_API_URL: ${NEXT_PUBLIC_CORTIX_API_URL}
+        NEXT_PUBLIC_FRONTALOS_WS_URL: ${NEXT_PUBLIC_FRONTALOS_WS_URL}
+    ports:
+      - "3000:3000"
+    environment:
+      # Server-side only (never sent to the browser) — used by the BFF proxy
+      # route (apps/web/src/app/api/proxy/[...path]/route.ts) to reach
+      # cortix-api over the internal Docker network.
+      - CORTIX_API_URL=http://cortix-api:8000
+      - NEXT_PUBLIC_CORTIX_API_URL=${NEXT_PUBLIC_CORTIX_API_URL}
+      - NEXT_PUBLIC_FRONTALOS_WS_URL=${NEXT_PUBLIC_FRONTALOS_WS_URL}
+      - NODE_ENV=${NODE_ENV:-production}
+    depends_on:
+      cortix-api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  cortix-api:
+    build:
+      context: ./services/cortix-api
+      dockerfile: Dockerfile
+      target: dev  # switch to `prod` for a real deployment — see the Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      # Bind-mount for hot-reload in dev (the `dev` build target runs
+      # uvicorn --reload). Remove this volume when using target: prod.
+      - ./services/cortix-api:/app
+    environment:
+      - DATABASE_URL=postgresql://frontalos:frontalos@postgres:5432/frontalos
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      - CORTIX_TABULAR_MODEL_PATH=${CORTIX_TABULAR_MODEL_PATH}
+      - CORTIX_MRI_MODEL_PATH=${CORTIX_MRI_MODEL_PATH}
+      - CORTIX_MRI_MODEL_PATH_FEMALE=${CORTIX_MRI_MODEL_PATH_FEMALE}
+      - CHAT_LLM_API_KEY=${CHAT_LLM_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  frontalos-engine:
+    build:
+      context: ./services/frontalos-engine
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"
+    environment:
+      - FRONTALOS_MODEL_PATH=${FRONTALOS_MODEL_PATH:-./models/frontal_x3d_model.pth}
+    healthcheck:
+      # Give PyTorch enough time to load the model weights from disk at startup.
+      # pretrained=False means no internet download, but torch.load() on a
+      # 12 MB .pth file + model init still takes ~30-60 s on first boot.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 90s
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=frontalos
+      - POSTGRES_PASSWORD=frontalos
+      - POSTGRES_DB=frontalos
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U frontalos -d frontalos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./infra/docker/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      web:
+        condition: service_started
+      cortix-api:
+        condition: service_healthy
+      frontalos-engine:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

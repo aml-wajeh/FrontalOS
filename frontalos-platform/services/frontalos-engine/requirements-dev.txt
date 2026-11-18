@@ -1,0 +1,19 @@
+# Test-time dependencies for services/frontalos-engine.
+#
+# Deliberately does NOT include torch/pytorchvideo: the test suite is
+# designed to run against the documented "torch not installed" demo-mode
+# fallback in core/model.py (see tests/conftest.py docstring), so CI can
+# run it fast and without a GPU or network access to fetch pretrained
+# weights. The same suite also passes if requirements.txt (torch +
+# pytorchvideo + real weights) is installed on top of this -- it only
+# asserts structural/range properties, not which of "model"/"demo" mode
+# produced them, except test_health_reports_demo_mode_without_torch which
+# is specific to the no-torch environment.
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+opencv-python-headless==4.10.0.84
+numpy==1.26.4
+websockets==12.0
+python-multipart==0.0.9
+pytest==8.3.3
+httpx==0.27.2

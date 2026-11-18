@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>FrontalOS Engine — Smoke Test Client</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #10172A; color: #F5F7FB; margin: 0; padding: 24px; }
+  h1 { font-size: 18px; color: #00C2A8; }
+  .row { display: flex; gap: 24px; flex-wrap: wrap; }
+  video, canvas { border-radius: 8px; border: 1px solid #2C375C; }
+  #metrics { background: #1B2340; border-radius: 8px; padding: 16px; min-width: 280px; }
+  .metric { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #2C375C; }
+  .metric span:first-child { color: #6B7280; }
+  #focusScore { font-size: 40px; font-weight: bold; color: #F4A261; text-align: center; margin: 8px 0; }
+  #status { padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; font-size: 13px; }
+  .ok { background: #E6F9F6; color: #10172A; }
+  .warn { background: #FDF0E6; color: #10172A; }
+  .err { background: #4a1c1c; color: #fff; }
+  button { background: #00C2A8; border: none; color: #10172A; padding: 10px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+</style>
+</head>
+<body>
+  <h1>FrontalOS Engine — WebSocket Smoke Test</h1>
+  <div id="status" class="warn">Not connected</div>
+  <div>
+    <label>WS URL: <input id="wsUrl" size="45" value="ws://localhost:8000/ws/observe/test-session" /></label>
+    <label style="margin-left:12px;">Send FPS: <input id="fps" type="number" value="8" min="1" max="15" style="width:50px" /></label>
+    <button id="startBtn">Start</button>
+    <button id="stopBtn" disabled>Stop</button>
+  </div>
+  <br />
+  <div class="row">
+    <div>
+      <video id="video" width="360" height="270" autoplay muted playsinline></video>
+      <canvas id="canvas" width="360" height="270" style="display:none;"></canvas>
+    </div>
+    <div id="metrics">
+      <div id="focusScore">--</div>
+      <div style="text-align:center; color:#6B7280; margin-bottom:12px;">Focus Score / 10</div>
+      <div class="metric"><span>Boredom</span><span id="mBoredom">--</span></div>
+      <div class="metric"><span>Engagement</span><span id="mEngagement">--</span></div>
+      <div class="metric"><span>Confusion</span><span id="mConfusion">--</span></div>
+      <div class="metric"><span>Frustration</span><span id="mFrustration">--</span></div>
+      <div class="metric"><span>Mode</span><span id="mMode">--</span></div>
+      <div class="metric"><span>Last update</span><span id="mTime">--</span></div>
+    </div>
+  </div>
+
+<script>
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+
+let ws = null;
+let sendInterval = null;
+let stream = null;
+
+function setStatus(text, cls) {
+  statusEl.textContent = text;
+  statusEl.className = cls;
+}
+
+function renderMetrics(data) {
+  document.getElementById('focusScore').textContent = data.focus_score.toFixed(1);
+  document.getElementById('mBoredom').textContent = data.boredom.toFixed(3);
+  document.getElementById('mEngagement').textContent = data.engagement.toFixed(3);
+  document.getElementById('mConfusion').textContent = data.confusion.toFixed(3);
+  document.getElementById('mFrustration').textContent = data.frustration.toFixed(3);
+  document.getElementById('mMode').textContent = data.inference_mode;
+  document.getElementById('mTime').textContent = new Date(data.timestamp).toLocaleTimeString();
+}
+
+async function start() {
+  const url = document.getElementById('wsUrl').value;
+  const fps = Number(document.getElementById('fps').value) || 8;
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { width: 360, height: 270 }, audio: false });
+  } catch (e) {
+    setStatus('Webcam access denied: ' + e.message, 'err');
+    return;
+  }
+  video.srcObject = stream;
+
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    setStatus('Connected — streaming frames', 'ok');
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+
+    sendInterval = setInterval(() => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          // reader.result is "data:image/jpeg;base64,...."
+          const b64 = reader.result.split(',')[1];
+          if (ws.readyState === WebSocket.OPEN) ws.send(b64);
+        };
+        reader.readAsDataURL(blob);
+      }, 'image/jpeg', 0.8);
+    }, 1000 / fps);
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      renderMetrics(data);
+    } catch (e) {
+      console.error('Bad message', event.data, e);
+    }
+  };
+
+  ws.onerror = () => setStatus('WebSocket error — see console', 'err');
+  ws.onclose = () => {
+    setStatus('Disconnected', 'warn');
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    if (sendInterval) clearInterval(sendInterval);
+  };
+}
+
+function stop() {
+  if (sendInterval) clearInterval(sendInterval);
+  if (ws) ws.close();
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+}
+
+startBtn.addEventListener('click', start);
+stopBtn.addEventListener('click', stop);
+</script>
+</body>
+</html>
