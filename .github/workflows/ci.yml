@@ -97,7 +97,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: frontalos-platform
           file: frontalos-platform/apps/web/Dockerfile
@@ -105,12 +105,12 @@ jobs:
           build-args: |
             NEXT_PUBLIC_CORTIX_API_URL=http://localhost:8000
             NEXT_PUBLIC_FRONTALOS_WS_URL=ws://localhost:8001
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: frontalos-platform/services/cortix-api
           target: prod
           push: false
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: frontalos-platform/services/frontalos-engine
           push: false
