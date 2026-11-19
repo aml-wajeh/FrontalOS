@@ -23,7 +23,7 @@ python-multipart==0.0.9
 # These are only imported lazily inside core/ai/*_service.py when a real
 # weight file is found on disk, so "demo" mode works even in environments
 # where these heavy packages aren't installed yet.
-numpy==1.26.4
+numpy==2.5.5
 scipy==1.13.1
 scikit-learn==1.5.1
 xgboost==2.1.1
