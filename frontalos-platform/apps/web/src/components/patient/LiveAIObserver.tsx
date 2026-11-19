@@ -6,7 +6,11 @@ import { Camera, RadioTower, ShieldAlert, Wifi, WifiOff } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { usePrefersReducedMotion } from "@/lib/hooks";
-import { useObserverSocket, type ObserverMetrics } from "@/lib/websocket/useObserverSocket";
+import {
+  useObserverSocket,
+  type ObserverMetrics,
+  type ObserverNudge,
+} from "@/lib/websocket/useObserverSocket";
 
 type PermissionState = "idle" | "requesting" | "granted" | "denied" | "unsupported";
 
@@ -26,7 +30,7 @@ export function LiveAIObserver({ sessionId, onMetricsUpdate }: LiveAIObserverPro
   const captureTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prefersReducedMotion = usePrefersReducedMotion();
 
-  const { status, metrics, sendFrame } = useObserverSocket({
+  const { status, metrics, sendFrame, sendNudgeFeedback } = useObserverSocket({
     sessionId,
     enabled: permission === "granted",
   });
@@ -35,6 +39,20 @@ export function LiveAIObserver({ sessionId, onMetricsUpdate }: LiveAIObserverPro
     if (metrics) onMetricsUpdate?.(metrics);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metrics]);
+
+  // A nudge arrives on exactly one message; keep it visible until the user answers.
+  const [activeNudge, setActiveNudge] = useState<ObserverNudge | null>(null);
+  useEffect(() => {
+    if (metrics?.nudge) setActiveNudge(metrics.nudge);
+  }, [metrics?.nudge]);
+
+  const answerNudge = useCallback(
+    (helpful: boolean) => {
+      sendNudgeFeedback(helpful);
+      setActiveNudge(null);
+    },
+    [sendNudgeFeedback],
+  );
 
   const requestCamera = useCallback(async () => {
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
@@ -131,6 +149,14 @@ export function LiveAIObserver({ sessionId, onMetricsUpdate }: LiveAIObserverPro
           <canvas ref={canvasRef} className="hidden" />
         </div>
 
+        {permission === "granted" && metrics?.focus_state && (
+          <p className="mt-3 text-xs font-medium text-muted" aria-live="polite">
+            {FOCUS_STATE_LABEL[metrics.focus_state]}
+          </p>
+        )}
+
+        {activeNudge && <NudgeCard onAnswer={answerNudge} />}
+
         {permission === "granted" && (
           <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-[1fr_auto] sm:items-center">
             <div className="space-y-3">
@@ -143,6 +169,40 @@ export function LiveAIObserver({ sessionId, onMetricsUpdate }: LiveAIObserverPro
         )}
       </div>
     </Card>
+  );
+}
+
+const FOCUS_STATE_LABEL: Record<ObserverMetrics["focus_state"], string> = {
+  warming_up: "Calibrating — the engine needs about 10 seconds of video first.",
+  focused: "You look focused.",
+  drifting: "Attention seems to be drifting.",
+};
+
+function NudgeCard({ onAnswer }: { onAnswer: (helpful: boolean) => void }) {
+  return (
+    <div
+      role="status"
+      className="mt-4 rounded-2xl border border-secondary/40 bg-secondary/10 p-4 text-sm text-primary-dark"
+    >
+      <p className="font-medium">Quick check-in</p>
+      <p className="mt-1 text-muted">
+        Your engagement has been low for a while. Try one small next step, or take a 2-minute break.
+      </p>
+      <div className="mt-3 flex gap-2">
+        <button
+          onClick={() => onAnswer(true)}
+          className="h-9 rounded-full bg-secondary px-4 text-xs font-medium text-primary-dark hover:bg-secondary/90"
+        >
+          Helpful
+        </button>
+        <button
+          onClick={() => onAnswer(false)}
+          className="h-9 rounded-full px-4 text-xs font-medium text-muted hover:bg-canvas"
+        >
+          Not now
+        </button>
+      </div>
+    </div>
   );
 }
 

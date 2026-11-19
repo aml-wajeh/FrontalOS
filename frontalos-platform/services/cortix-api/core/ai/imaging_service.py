@@ -24,7 +24,6 @@ import base64
 import hashlib
 import io
 import os
-from typing import Optional
 
 import numpy as np
 from PIL import Image
@@ -43,7 +42,6 @@ def _load_array_from_bytes(filename: str, data: bytes) -> np.ndarray:
     lower = filename.lower()
 
     if lower.endswith(".dcm"):
-        import pydicom
         from pydicom.filereader import dcmread
 
         ds = dcmread(io.BytesIO(data))
@@ -51,9 +49,10 @@ def _load_array_from_bytes(filename: str, data: bytes) -> np.ndarray:
         if arr.ndim == 3:
             arr = arr[arr.shape[0] // 2]
 
-    elif lower.endswith(".nii") or lower.endswith(".nii.gz"):
-        import nibabel as nib
+    elif lower.endswith((".nii", ".nii.gz")):
         import tempfile
+
+        import nibabel as nib
 
         suffix = ".nii.gz" if lower.endswith(".nii.gz") else ".nii"
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
@@ -150,14 +149,14 @@ class ImagingService:
     completely unchanged.
     """
 
-    def __init__(self, model_path: Optional[str] = None, model_path_female: Optional[str] = None):
+    def __init__(self, model_path: str | None = None, model_path_female: str | None = None):
         self.model_path = model_path or settings.CORTIX_MRI_MODEL_PATH
         self.model_path_female = model_path_female or settings.CORTIX_MRI_MODEL_PATH_FEMALE
         self._model = None
         self._model_female = None
         self._mode = "demo"
         self._mode_female = "demo"
-        self._load_error: Optional[str] = None
+        self._load_error: str | None = None
         self._try_load()
 
     def _try_load(self) -> None:
@@ -165,14 +164,14 @@ class ImagingService:
         self._model_female, self._mode_female, _ = self._load_one(self.model_path_female)
 
     @staticmethod
-    def _load_one(path: Optional[str]):
+    def _load_one(path: str | None):
         if not path or not os.path.exists(path):
             return None, "demo", None
         try:
             from tensorflow.keras.models import load_model  # lazy import
 
             return load_model(path, compile=False), "live", None
-        except Exception as e:  # noqa: BLE001 — never crash the app on a bad/missing weight file
+        except Exception as e:
             return None, "demo", str(e)
 
     @property
@@ -181,12 +180,12 @@ class ImagingService:
         return self._mode
 
     @property
-    def load_error(self) -> Optional[str]:
+    def load_error(self) -> str | None:
         """Why the general model stayed in demo mode despite a model_path being
         configured — None if the path is simply unset/missing, or if mode is "live"."""
         return self._load_error
 
-    def _select_model(self, gender: Optional[str]):
+    def _select_model(self, gender: str | None):
         """Returns (model, mode) for this prediction. Female model is used
         only when explicitly requested AND actually loaded; otherwise this
         always falls back to the general model/mode, exactly as before
@@ -195,7 +194,7 @@ class ImagingService:
             return self._model_female, self._mode_female
         return self._model, self._mode
 
-    def predict(self, filename: str, data: bytes, gender: Optional[str] = None) -> dict:
+    def predict(self, filename: str, data: bytes, gender: str | None = None) -> dict:
         raw_slice = _load_array_from_bytes(filename, data)
         resized_slice = _resize(raw_slice)
         slice_b64 = _to_base64_png(resized_slice)

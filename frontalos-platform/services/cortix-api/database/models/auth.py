@@ -21,9 +21,10 @@ definition (2) was dropped as redundant now that `Role`/`UserRole` exist.
 
 No new columns, tables, or behavior were invented beyond this reconciliation.
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
-from sqlalchemy.orm import relationship
 from datetime import datetime
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
 
 from database.base import Base
 

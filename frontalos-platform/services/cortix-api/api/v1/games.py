@@ -18,8 +18,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from database.session import get_db
 from database.models import GameSessionRecord, RewardTransaction
+from database.session import get_db
 
 router = APIRouter(prefix="/games", tags=["Games"])
 

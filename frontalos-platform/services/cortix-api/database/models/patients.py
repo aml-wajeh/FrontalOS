@@ -6,9 +6,10 @@ Moved from `backend/patients/models.py`. Only the `Base` import path was
 changed (now points at the single canonical `database.base`); everything
 else is unchanged from the original.
 """
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text, JSON
-from sqlalchemy.orm import relationship
 from datetime import datetime
+
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
 
 from database.base import Base
 

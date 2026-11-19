@@ -8,27 +8,29 @@ import io
 from datetime import datetime, timedelta
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import (
-    SimpleDocTemplate,
+    Image as RLImage,
+)
+from reportlab.platypus import (
     Paragraph,
+    SimpleDocTemplate,
     Spacer,
     Table,
     TableStyle,
-    Image as RLImage,
 )
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from sqlalchemy.orm import Session
 
+from database.models import AIPrediction, CheckIn, Patient
 from database.session import get_db
-from database.models import Patient, AIPrediction, CheckIn
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 

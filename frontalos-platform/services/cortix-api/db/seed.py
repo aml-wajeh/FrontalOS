@@ -29,10 +29,10 @@ Run manually (outside Docker) with:
 import random
 from datetime import datetime, timedelta
 
-from database.session import SessionLocal, init_db
-from database.models import User, Role, UserRole, Patient
-from database.models.clinical import AIPrediction, CheckIn, Goal, TimelineEvent
 from core.security import hash_password
+from database.models import Patient, Role, User, UserRole
+from database.models.clinical import AIPrediction, CheckIn, Goal, TimelineEvent
+from database.session import SessionLocal, init_db
 
 random.seed(42)  # deterministic demo data across seed runs
 

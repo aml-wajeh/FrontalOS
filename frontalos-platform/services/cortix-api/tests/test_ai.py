@@ -28,7 +28,6 @@ docs/MODELS_README.md for what would need to change on either front.
 """
 import io
 
-import pytest
 from PIL import Image
 
 from core.ai.tabular_service import FEATURE_COUNT
@@ -114,8 +113,9 @@ def test_tabular_predict_notifies_guardian_and_doctor(client, db_session):
     _notify_new_prediction and api/v1/notifications.py."""
     patient = _make_patient(db_session, guardian_id=None, doctor_id=None)
     # Register real users so the ids are valid User rows, then attach them.
-    from database.models import User
     import uuid
+
+    from database.models import User
 
     guardian = User(email=f"g-{uuid.uuid4().hex[:8]}@example.com", hashed_password="x", full_name="G", is_active=True)
     doctor = User(email=f"d-{uuid.uuid4().hex[:8]}@example.com", hashed_password="x", full_name="D", is_active=True)

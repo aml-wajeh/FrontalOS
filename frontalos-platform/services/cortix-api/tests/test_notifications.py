@@ -86,7 +86,7 @@ def test_mark_read_updates_is_read(client, db_session, register_and_login):
 
 
 def test_cannot_mark_read_another_users_notification(client, db_session, register_and_login):
-    user_a_id, _t, headers_a = register_and_login(
+    _user_a_id, _t, headers_a = register_and_login(
         client, email="notife@example.com", password="correcthorse1", full_name="E", role="parent"
     )
     user_b_id, _t2, headers_b = register_and_login(

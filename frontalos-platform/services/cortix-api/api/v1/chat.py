@@ -17,8 +17,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from core.config import settings
+from database.models import AIPrediction, CheckIn, Patient
 from database.session import get_db
-from database.models import Patient, CheckIn, AIPrediction
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 

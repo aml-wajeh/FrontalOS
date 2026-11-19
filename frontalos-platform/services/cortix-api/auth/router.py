@@ -22,15 +22,15 @@ from sqlalchemy.orm import Session
 
 from core.audit import record_audit_event
 from core.security import (
-    hash_password,
-    verify_password,
     create_access_token,
     create_refresh_token,
     decode_token,
     get_current_user,
+    hash_password,
+    verify_password,
 )
+from database.models import PasswordResetToken, Role, User, UserRole
 from database.session import get_db
-from database.models import PasswordResetToken, User, Role, UserRole
 
 logger = logging.getLogger("cortix_api.auth")
 

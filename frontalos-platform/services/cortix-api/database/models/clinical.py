@@ -6,9 +6,10 @@ used to live in this file was removed — the canonical `User` now lives in
 `database/models/auth.py` (see the merge note there). Everything else in
 this file is unchanged from the original.
 """
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text, JSON
-from sqlalchemy.orm import relationship
 from datetime import datetime
+
+from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
 
 from database.base import Base
 

@@ -5,7 +5,6 @@ secret is hardcoded — JWT_SECRET_KEY comes from core.config.settings, which
 reads it from the environment.
 """
 from datetime import datetime, timedelta
-from typing import Optional
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -14,8 +13,8 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from core.config import settings
-from database.session import get_db
 from database.models import User
+from database.session import get_db
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
@@ -29,7 +28,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(subject: str, extra_claims: Optional[dict] = None) -> str:
+def create_access_token(subject: str, extra_claims: dict | None = None) -> str:
     to_encode = {"sub": subject, "type": "access"}
     if extra_claims:
         to_encode.update(extra_claims)
@@ -50,9 +49,9 @@ def decode_token(token: str) -> dict:
     try:
         return jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired") from None
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from None
 
 
 def get_current_user(
@@ -104,7 +103,7 @@ def require_role(required_role: str):
 def get_current_user_optional(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
-) -> Optional[User]:
+) -> User | None:
     """Like get_current_user, but returns None instead of raising when no
     token is supplied. Used by endpoints that personalize output when
     authenticated but still work for anonymous/demo calls (e.g. AI endpoints

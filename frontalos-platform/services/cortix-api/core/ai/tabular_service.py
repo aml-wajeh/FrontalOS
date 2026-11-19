@@ -35,7 +35,6 @@ model file is present (or, as above, present but unloadable).
 import hashlib
 import os
 import pickle
-from typing import Optional
 
 import numpy as np
 
@@ -49,11 +48,11 @@ class TabularModelError(Exception):
 
 
 class TabularService:
-    def __init__(self, model_path: Optional[str] = None):
+    def __init__(self, model_path: str | None = None):
         self.model_path = model_path or settings.CORTIX_TABULAR_MODEL_PATH
         self._model = None
         self._mode = "demo"
-        self._load_error: Optional[str] = None
+        self._load_error: str | None = None
         self._try_load()
 
     def _try_load(self) -> None:
@@ -64,7 +63,7 @@ class TabularService:
             with open(self.model_path, "rb") as f:
                 self._model = pickle.load(f)
             self._mode = "live"
-        except Exception as e:  # noqa: BLE001 — any load failure -> demo, never crash the app
+        except Exception as e:
             self._model = None
             self._mode = "demo"
             self._load_error = str(e)
@@ -74,7 +73,7 @@ class TabularService:
         return self._mode
 
     @property
-    def load_error(self) -> Optional[str]:
+    def load_error(self) -> str | None:
         """Why this stayed in demo mode despite a model_path being configured —
         None if the path is simply unset/missing, or if mode is "live"."""
         return self._load_error

@@ -11,16 +11,14 @@ medication adherence / social engagement scores), this module returns
 number — same honesty standard as the AI layer's live/demo split.
 """
 from datetime import datetime, timedelta
-from typing import Optional
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException
 from scipy import stats
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from database.models import CheckIn, Patient
 from database.session import get_db
-from database.models import Patient, CheckIn
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
@@ -67,7 +65,7 @@ def get_progress_analytics(patient_id: int, db: Session = Depends(get_db)):
     sleep_vs_attention = None
     pairs = [(c.sleep_hours, c.attention_score) for c in checkins if c.sleep_hours is not None and c.attention_score is not None]
     if len(pairs) >= 3:
-        sleep_vals, attn_vals = zip(*pairs)
+        sleep_vals, attn_vals = zip(*pairs, strict=True)
         if np.std(sleep_vals) > 0 and np.std(attn_vals) > 0:
             corr, p_value = stats.pearsonr(sleep_vals, attn_vals)
             sleep_vs_attention = {
@@ -170,7 +168,7 @@ def get_radar(patient_id: int, db: Session = Depends(get_db)):
 
     axes = ["Focus", "Activity Level", "Sleep Quality", "Medication Adherence", "Social Engagement"]
 
-    def _avg(vals: list[Optional[float]]) -> Optional[float]:
+    def _avg(vals: list[float | None]) -> float | None:
         vals = [v for v in vals if v is not None]
         return float(np.mean(vals)) if vals else None
 

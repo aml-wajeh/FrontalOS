@@ -23,7 +23,6 @@ any reason (e.g. a mid-transaction issue) it's caught and logged instead
 of propagating.
 """
 import logging
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -36,9 +35,9 @@ def record_audit_event(
     db: Session,
     action: str,
     *,
-    user_id: Optional[int] = None,
-    ip_address: Optional[str] = None,
-    details: Optional[str] = None,
+    user_id: int | None = None,
+    ip_address: str | None = None,
+    details: str | None = None,
 ) -> None:
     """Writes one AuditLog row. See module docstring for why this exists
     and why it never raises back into the caller's request handler."""
@@ -52,6 +51,6 @@ def record_audit_event(
             )
         )
         db.commit()
-    except Exception:  # noqa: BLE001 — an audit-write failure must never fail the caller's request
+    except Exception:
         db.rollback()
         logger.exception("Failed to record audit event action=%s user_id=%s", action, user_id)

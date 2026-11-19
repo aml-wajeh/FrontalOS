@@ -13,6 +13,7 @@ api/v1/ai.py, api/v1/analytics.py). This resolves the gap documented in
 docs/AUDIT.md §2.
 """
 import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 

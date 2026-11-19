@@ -14,7 +14,18 @@ export interface ObserverMetrics {
   frustration: number;
   focus_score: number; // 0-10
   inference_mode: "model" | "demo";
+  /** Output of the engine's intervention policy (smoothing + hysteresis + cooldown). */
+  focus_state: "warming_up" | "focused" | "drifting";
+  smoothed_engagement: number | null;
+  /** Present only on the message where the policy decides to nudge. */
+  nudge: ObserverNudge | null;
   timestamp: string;
+}
+
+export interface ObserverNudge {
+  id: number;
+  reason: string;
+  drift_seconds: number;
 }
 
 export type ObserverSocketStatus =
@@ -115,5 +126,13 @@ export function useObserverSocket({ sessionId, enabled }: UseObserverSocketOptio
     }
   }, []);
 
-  return { status, metrics, sendFrame };
+  /** Tells the engine whether the last nudge helped; dismissals back off future nudges. */
+  const sendNudgeFeedback = useCallback((helpful: boolean) => {
+    const socket = socketRef.current;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "nudge_feedback", helpful }));
+    }
+  }, []);
+
+  return { status, metrics, sendFrame, sendNudgeFeedback };
 }

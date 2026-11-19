@@ -1,19 +1,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from auth.router import router as auth_router
+from api.v1.admin import router as admin_router
 from api.v1.ai import router as ai_router
 from api.v1.analytics import router as analytics_router
-from api.v1.reports import router as reports_router
 from api.v1.chat import router as chat_router
-from api.v1.patients import router as patients_router
-from api.v1.games import router as games_router
 from api.v1.checkins import router as checkins_router
+from api.v1.games import router as games_router
 from api.v1.notifications import router as notifications_router
+from api.v1.patients import router as patients_router
+from api.v1.reports import router as reports_router
 from api.v1.rewards import router as rewards_router
-from api.v1.admin import router as admin_router
-from database.session import init_db, USING_SQLITE_FALLBACK
+from auth.router import router as auth_router
 from core.config import settings
+from database.session import USING_SQLITE_FALLBACK, init_db
 
 app = FastAPI(
     title="CORTIX AI-Powered ADHD Clinical Decision Support Platform API",
@@ -57,8 +57,8 @@ def on_startup():
 
 @app.get("/health")
 def health_check():
-    from core.ai.tabular_service import tabular_service
     from core.ai.imaging_service import imaging_service
+    from core.ai.tabular_service import tabular_service
 
     return {
         "status": "healthy",

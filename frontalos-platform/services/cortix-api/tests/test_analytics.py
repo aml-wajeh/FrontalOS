@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from database.models import Patient, CheckIn
+from database.models import CheckIn, Patient
 
 
 def _make_patient(db_session, **kwargs) -> Patient:

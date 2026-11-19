@@ -1,0 +1,10 @@
+line-length = 120
+extend-exclude = ["reference"]
+
+[lint]
+select = ["E", "F", "I", "B", "UP", "DTZ", "PIE", "RUF"]
+ignore = [
+  "E501",
+  "B008",   # FastAPI's Depends()/Query() in defaults is the framework's intended pattern
+  "DTZ003", # utcnow(): DB columns are naive UTC today; switching to aware datetimes needs a migration
+]

@@ -8,11 +8,11 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from core.ai.tabular_service import tabular_service, TabularModelError, FEATURE_COUNT
-from core.ai.imaging_service import imaging_service, ImagingModelError
-from database.session import get_db
-from database.models import Patient, AIPrediction
 from api.v1.notifications import create_notification
+from core.ai.imaging_service import ImagingModelError, imaging_service
+from core.ai.tabular_service import FEATURE_COUNT, TabularModelError, tabular_service
+from database.models import AIPrediction, Patient
+from database.session import get_db
 
 router = APIRouter(prefix="/ai", tags=["AI Models"])
 
@@ -33,7 +33,7 @@ def _notify_new_prediction(db: Session, patient: Patient, model_label: str) -> N
                     title="New AI assessment ready",
                     message=f"A new {model_label} result is available for {patient.name}.",
                 )
-    except Exception:  # noqa: BLE001 — best-effort, never blocks the prediction response
+    except Exception:
         db.rollback()
 
 
@@ -56,7 +56,7 @@ def predict_tabular(req: TabularPredictRequest, db: Session = Depends(get_db)):
     try:
         result = tabular_service.predict(req.features)
     except TabularModelError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     risk_level = "High" if result["probability"] > 0.5 else "Low"
 
@@ -107,9 +107,9 @@ async def predict_mri(patient_id: int, file: UploadFile = File(...), db: Session
         # instead of every prediction silently using only the general model.
         result = imaging_service.predict(file.filename or "upload", contents, gender=patient.gender)
     except ImagingModelError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:  # noqa: BLE001 — decode/processing failures -> 400, not a 500 crash
-        raise HTTPException(status_code=400, detail=f"Could not process uploaded scan: {e}")
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not process uploaded scan: {e}") from e
 
     row = AIPrediction(
         patient_id=patient_id,

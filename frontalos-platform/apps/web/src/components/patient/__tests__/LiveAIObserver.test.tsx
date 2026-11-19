@@ -21,6 +21,8 @@ vi.mock("@/lib/websocket/useObserverSocket", async () => {
   };
 });
 
+const sendNudgeFeedback = vi.fn();
+
 function mockSocket(overrides: {
   status?: ObserverSocketStatus;
   metrics?: ObserverMetrics | null;
@@ -29,6 +31,7 @@ function mockSocket(overrides: {
     status: overrides.status ?? "idle",
     metrics: overrides.metrics ?? null,
     sendFrame: vi.fn(),
+    sendNudgeFeedback,
   });
 }
 
@@ -89,6 +92,9 @@ describe("LiveAIObserver", () => {
         frustration: 0.05,
         focus_score: 8.3,
         inference_mode: "model",
+        focus_state: "focused",
+        smoothed_engagement: 0.75,
+        nudge: null,
         timestamp: new Date().toISOString(),
       },
     });
@@ -116,6 +122,9 @@ describe("LiveAIObserver", () => {
         frustration: 0.5,
         focus_score: 5.0,
         inference_mode: "demo",
+        focus_state: "warming_up",
+        smoothed_engagement: null,
+        nudge: null,
         timestamp: new Date().toISOString(),
       },
     });
@@ -124,6 +133,36 @@ describe("LiveAIObserver", () => {
     await userEvent.click(screen.getByRole("button", { name: /Turn On Camera/i }));
 
     expect(await screen.findByText("Demo mode")).toBeInTheDocument();
+  });
+
+  it("shows a nudge card and sends feedback when the user answers it", async () => {
+    stubGetUserMedia(() =>
+      Promise.resolve({ getTracks: () => [] } as unknown as MediaStream)
+    );
+    mockSocket({
+      status: "open",
+      metrics: {
+        boredom: 0.6,
+        engagement: 0.3,
+        confusion: 0.1,
+        frustration: 0.1,
+        focus_score: 4.0,
+        inference_mode: "model",
+        focus_state: "drifting",
+        smoothed_engagement: 0.32,
+        nudge: { id: 1, reason: "sustained_low_engagement", drift_seconds: 31 },
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    render(<LiveAIObserver sessionId="session-1" />);
+    await userEvent.click(screen.getByRole("button", { name: /Turn On Camera/i }));
+
+    expect(await screen.findByText("Quick check-in")).toBeInTheDocument();
+    expect(screen.getByText(/Attention seems to be drifting/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Not now" }));
+    expect(sendNudgeFeedback).toHaveBeenCalledWith(false);
+    expect(screen.queryByText("Quick check-in")).not.toBeInTheDocument();
   });
 
   it("shows a reconnecting indicator when the socket status is reconnecting", () => {

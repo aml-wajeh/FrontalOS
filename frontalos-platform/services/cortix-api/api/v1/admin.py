@@ -27,8 +27,8 @@ from sqlalchemy.orm import Session
 from core.audit import record_audit_event
 from core.config import settings
 from core.security import require_role
-from database.session import get_db
 from database.models import AuditLog, Role, User, UserRole
+from database.session import get_db
 
 logger = logging.getLogger("cortix_api.admin")
 
@@ -206,8 +206,8 @@ def system_health(_admin: User = Depends(require_role("admin"))):
     # cortix-api's own health — call the logic directly rather than
     # round-tripping an HTTP request to itself.
     try:
-        from core.ai.tabular_service import tabular_service
         from core.ai.imaging_service import imaging_service
+        from core.ai.tabular_service import tabular_service
         from database.session import USING_SQLITE_FALLBACK
 
         results.append(
@@ -225,7 +225,7 @@ def system_health(_admin: User = Depends(require_role("admin"))):
                 },
             )
         )
-    except Exception as e:  # noqa: BLE001 — this endpoint must never itself 500
+    except Exception as e:
         results.append(ServiceHealthOut(name="cortix-api", reachable=False, error=str(e)))
 
     engine_url = settings.FRONTALOS_ENGINE_HEALTH_URL
@@ -233,7 +233,7 @@ def system_health(_admin: User = Depends(require_role("admin"))):
         resp = httpx.get(engine_url, timeout=3.0)
         resp.raise_for_status()
         results.append(ServiceHealthOut(name="frontalos-engine", reachable=True, detail=resp.json()))
-    except Exception as e:  # noqa: BLE001 — network errors, timeouts, non-2xx, etc.
+    except Exception as e:
         results.append(ServiceHealthOut(name="frontalos-engine", reachable=False, error=str(e)))
 
     return results
