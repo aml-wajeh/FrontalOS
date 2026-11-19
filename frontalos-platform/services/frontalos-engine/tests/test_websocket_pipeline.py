@@ -21,6 +21,9 @@ EXPECTED_KEYS = {
     "frustration",
     "focus_score",
     "inference_mode",
+    "focus_state",
+    "smoothed_engagement",
+    "nudge",
     "timestamp",
 }
 
@@ -37,44 +40,52 @@ def test_health_reports_demo_mode_without_torch():
 
 
 def test_websocket_pushes_well_formed_predictions_for_synthetic_frames():
-    with TestClient(app) as client:
-        with client.websocket_connect("/ws/observe/test-session-1") as ws:
-            # Send a handful of synthetic frames, as the browser client
-            # would at ~5-10fps.
-            for i in range(5):
-                ws.send_text(make_synthetic_jpeg_b64(seed=i).decode("ascii"))
+    with TestClient(app) as client, client.websocket_connect("/ws/observe/test-session-1") as ws:
+        # Send a handful of synthetic frames, as the browser client
+        # would at ~5-10fps.
+        for i in range(5):
+            ws.send_text(make_synthetic_jpeg_b64(seed=i).decode("ascii"))
 
-            message = ws.receive_json()
+        message = ws.receive_json()
 
-            assert EXPECTED_KEYS.issubset(message.keys())
-            assert message["inference_mode"] in ("model", "demo")
+        assert EXPECTED_KEYS.issubset(message.keys())
+        assert message["inference_mode"] in ("model", "demo")
 
-            for field in ("boredom", "engagement", "confusion", "frustration"):
-                assert 0.0 <= message[field] <= 1.0
+        for field in ("boredom", "engagement", "confusion", "frustration"):
+            assert 0.0 <= message[field] <= 1.0
 
-            assert 0.0 <= message["focus_score"] <= 10.0
-            # ISO 8601 timestamp should be parseable.
-            from datetime import datetime
+        assert 0.0 <= message["focus_score"] <= 10.0
+        # ISO 8601 timestamp should be parseable.
+        from datetime import datetime
 
-            datetime.fromisoformat(message["timestamp"])
+        datetime.fromisoformat(message["timestamp"])
 
 
 def test_websocket_active_session_count_reflected_in_health():
-    with TestClient(app) as client:
-        with client.websocket_connect("/ws/observe/test-session-2") as ws:
-            ws.send_text(make_synthetic_jpeg_b64(seed=1).decode("ascii"))
-            ws.receive_json()
+    with TestClient(app) as client, client.websocket_connect("/ws/observe/test-session-2") as ws:
+        ws.send_text(make_synthetic_jpeg_b64(seed=1).decode("ascii"))
+        ws.receive_json()
 
-            resp = client.get("/health")
-            assert resp.json()["active_sessions"] >= 1
+        resp = client.get("/health")
+        assert resp.json()["active_sessions"] >= 1
 
 
 def test_websocket_ignores_malformed_frame_without_crashing():
-    with TestClient(app) as client:
-        with client.websocket_connect("/ws/observe/test-session-3") as ws:
-            ws.send_text("not-valid-base64-jpeg!!!")
-            # The engine still emits demo-mode readings on its own cadence
-            # even though the bad frame was discarded -- the socket must
-            # stay open and keep producing well-formed messages.
-            message = ws.receive_json()
-            assert EXPECTED_KEYS.issubset(message.keys())
+    with TestClient(app) as client, client.websocket_connect("/ws/observe/test-session-3") as ws:
+        ws.send_text("not-valid-base64-jpeg!!!")
+        # The engine still emits demo-mode readings on its own cadence
+        # even though the bad frame was discarded -- the socket must
+        # stay open and keep producing well-formed messages.
+        message = ws.receive_json()
+        assert EXPECTED_KEYS.issubset(message.keys())
+
+
+def test_websocket_reports_focus_state_and_accepts_nudge_feedback():
+    """The intervention policy's state rides on every message, and JSON
+    control messages are accepted without being treated as frames."""
+    with TestClient(app) as client, client.websocket_connect("/ws/observe/test-session-4") as ws:
+        ws.send_text('{"type": "nudge_feedback", "helpful": false}')
+        ws.send_text("{not json")  # malformed control message must be ignored
+        message = ws.receive_json()
+        assert message["focus_state"] in ("warming_up", "focused", "drifting")
+        assert message["nudge"] is None or {"id", "reason", "drift_seconds"} <= message["nudge"].keys()

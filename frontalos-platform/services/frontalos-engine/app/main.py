@@ -18,8 +18,10 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import json
 import logging
-from datetime import datetime, timezone
+import time
+from datetime import UTC, datetime
 
 import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -27,6 +29,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .core.focus_score import compute_focus_score
 from .core.inference_engine import SessionManager
+from .core.intervention_policy import InterventionPolicy
 from .core.model import LABEL_NAMES, load_model
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -71,6 +74,7 @@ async def health() -> dict:
         "model_loaded": _model_status.loaded if _model_status else False,
         "inference_mode": "model" if (_model_status and _model_status.loaded) else "demo",
         "device": _model_status.device if _model_status else "unknown",
+        "model_version": _model_status.model_version if _model_status else None,
         "reason": _model_status.reason if _model_status else None,
         "torch_available": _model_status.torch_available if _model_status else False,
         "cuda_available": _model_status.cuda_available if _model_status else False,
@@ -99,6 +103,17 @@ def _decode_jpeg_b64_to_bgr(raw: bytes) -> np.ndarray:
     return frame
 
 
+def _handle_control_message(text: str, policy: InterventionPolicy, session_id: str) -> None:
+    """Applies a client control message; malformed ones are ignored."""
+    try:
+        msg = json.loads(text)
+    except json.JSONDecodeError:
+        logger.debug("Ignoring malformed control message for session=%s", session_id)
+        return
+    if isinstance(msg, dict) and msg.get("type") == "nudge_feedback":
+        policy.feedback(helpful=bool(msg.get("helpful")))
+
+
 @app.websocket("/ws/observe/{session_id}")
 async def observe(websocket: WebSocket, session_id: str) -> None:
     """
@@ -119,8 +134,14 @@ async def observe(websocket: WebSocket, session_id: str) -> None:
              "confusion": float, "frustration": float,
              "focus_score": float,
              "inference_mode": "model" | "demo",
+             "focus_state": "warming_up" | "focused" | "drifting",
+             "smoothed_engagement": float | null,
+             "nudge": {"id": int, "reason": str, "drift_seconds": float} | null,
              "timestamp": iso8601
            }
+    5. The client may send JSON control messages (text starting with "{"):
+           {"type": "nudge_feedback", "helpful": true | false}
+       Dismissals back off the nudge cooldown; "helpful" resets it.
     """
     await websocket.accept()
 
@@ -129,6 +150,7 @@ async def observe(websocket: WebSocket, session_id: str) -> None:
         return
 
     engine = _session_manager.get_or_create(session_id)
+    policy = InterventionPolicy()
 
     async def receive_loop() -> None:
         """Reads incoming JPEG frames from the client and feeds the engine."""
@@ -141,7 +163,11 @@ async def observe(websocket: WebSocket, session_id: str) -> None:
             if "bytes" in message and message["bytes"] is not None:
                 payload = message["bytes"]
             elif "text" in message and message["text"] is not None:
-                payload = message["text"].encode("ascii")
+                text = message["text"]
+                if text.lstrip().startswith("{"):
+                    _handle_control_message(text, policy, session_id)
+                    continue
+                payload = text.encode("ascii")
             else:
                 continue
 
@@ -171,6 +197,8 @@ async def observe(websocket: WebSocket, session_id: str) -> None:
                         result.values + [0.0, 0.0, 0.0, 0.0]
                     )[:4]
                     focus_score = compute_focus_score(boredom, engagement, confusion, frustration)
+                    decision = policy.update(engagement, time.monotonic())
+                    nudge = decision.nudge
                     await websocket.send_json({
                         "boredom": boredom,
                         "engagement": engagement,
@@ -178,7 +206,12 @@ async def observe(websocket: WebSocket, session_id: str) -> None:
                         "frustration": frustration,
                         "focus_score": focus_score,
                         "inference_mode": result.inference_mode,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "focus_state": decision.state.value,
+                        "smoothed_engagement": decision.smoothed_engagement,
+                        "nudge": None if nudge is None else {
+                            "id": nudge.id, "reason": nudge.reason, "drift_seconds": nudge.drift_seconds,
+                        },
+                        "timestamp": datetime.now(UTC).isoformat(),
                     })
             await asyncio.sleep(0.1)
 
@@ -197,7 +230,7 @@ async def observe(websocket: WebSocket, session_id: str) -> None:
                 raise exc
     except WebSocketDisconnect:
         logger.info("Session %s disconnected", session_id)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.exception("Unexpected error in session %s", session_id)
     finally:
         receive_task.cancel()

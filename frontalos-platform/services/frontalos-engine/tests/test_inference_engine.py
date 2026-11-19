@@ -66,14 +66,16 @@ def test_demo_engine_updates_over_time():
         engine.stop()
 
 
-def test_push_frame_accepts_synthetic_frames_up_to_buffer_size():
-    """Pushing more than NUM_FRAMES frames must not grow the buffer past
-    its rolling window (it's a maxlen deque)."""
+def test_push_frame_burst_is_rate_limited_by_the_temporal_buffer():
+    """A burst of frames must not grow the buffer: the v2 temporal buffer
+    stores at most one frame per (window / 2*NUM_FRAMES) seconds, so memory
+    stays bounded whatever the client's frame rate."""
     engine = InferenceEngine(model=None, device=None, model_status_loaded=False)
     try:
         for i in range(NUM_FRAMES + 10):
             engine.push_frame(make_synthetic_frame(seed=i))
-        assert len(engine.buffer) == NUM_FRAMES
+        assert 1 <= len(engine.buffer) <= 2
+        assert engine.buffer.sample() is None  # a burst is not a 10 s window
     finally:
         engine.stop()
 

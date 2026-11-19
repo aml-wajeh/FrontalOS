@@ -17,8 +17,8 @@ Author: Senior DL Engineering (PyTorch)
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 import cv2
 import numpy as np
@@ -39,7 +39,12 @@ logger = logging.getLogger("DAiSEE")
 # --------------------------------------------------------------------------- #
 # Constants
 # --------------------------------------------------------------------------- #
-DEFAULT_ROOT = Path(r"D:\ADHD_FINAL_PROJECT\Dataset")
+def default_root() -> Path:
+    """Dataset location: $DAISEE_ROOT if set, else ./DataSet next to this file."""
+    return Path(os.environ.get("DAISEE_ROOT", Path(__file__).resolve().parent / "DataSet"))
+
+
+DEFAULT_ROOT = default_root()
 VIDEO_EXTENSIONS = (".avi", ".mp4", ".mov", ".mkv")
 NUM_FRAMES = 16
 FRAME_SIZE = 224
@@ -97,7 +102,7 @@ class DAiSEEDataset(Dataset):
         if not self.split_video_dir.exists():
             raise FileNotFoundError(f"Video directory not found: {self.split_video_dir}")
 
-        self.samples: List[Tuple[Path, torch.Tensor]] = self._build_samples(txt_path, csv_path)
+        self.samples: list[tuple[Path, torch.Tensor]] = self._build_samples(txt_path, csv_path)
 
         if len(self.samples) == 0:
             raise RuntimeError(
@@ -110,23 +115,23 @@ class DAiSEEDataset(Dataset):
     # ------------------------------------------------------------------ #
     # Construction helpers
     # ------------------------------------------------------------------ #
-    def _index_video_files(self) -> Dict[str, Path]:
+    def _index_video_files(self) -> dict[str, Path]:
         """
         Walk the split directory ONCE and build a filename -> absolute path
         lookup table. This avoids an expensive glob() per-video and scales
         well to datasets with tens of thousands of nested clips.
         """
         logger.info(f"Indexing video files under: {self.split_video_dir} (this may take a moment)...")
-        index: Dict[str, Path] = {}
+        index: dict[str, Path] = {}
         for ext in VIDEO_EXTENSIONS:
             for path in self.split_video_dir.rglob(f"*{ext}"):
                 index[path.name] = path
         logger.info(f"Indexed {len(index)} video files.")
         return index
 
-    def _build_samples(self, txt_path: Path, csv_path: Path) -> List[Tuple[Path, torch.Tensor]]:
+    def _build_samples(self, txt_path: Path, csv_path: Path) -> list[tuple[Path, torch.Tensor]]:
         # 1. Read manifest filenames
-        with open(txt_path, "r", encoding="utf-8") as f:
+        with open(txt_path, encoding="utf-8") as f:
             filenames = [line.strip() for line in f if line.strip()]
 
         # 2. Read labels CSV, indexed by ClipID
@@ -138,7 +143,7 @@ class DAiSEEDataset(Dataset):
         # 3. Build a filename -> path lookup (single filesystem walk)
         path_index = self._index_video_files()
 
-        samples: List[Tuple[Path, torch.Tensor]] = []
+        samples: list[tuple[Path, torch.Tensor]] = []
         missing_video = 0
         missing_label = 0
 
@@ -190,17 +195,17 @@ class DAiSEEDataset(Dataset):
         """
         cap = cv2.VideoCapture(str(video_path))
         if not cap.isOpened():
-            raise IOError(f"OpenCV could not open video: {video_path}")
+            raise OSError(f"OpenCV could not open video: {video_path}")
 
         try:
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             if total_frames <= 0:
-                raise IOError(f"Video reports 0 frames (possibly corrupt): {video_path}")
+                raise OSError(f"Video reports 0 frames (possibly corrupt): {video_path}")
 
             target_indices = np.linspace(0, total_frames - 1, self.num_frames).astype(int)
             wanted = set(target_indices.tolist())
 
-            decoded: Dict[int, np.ndarray] = {}
+            decoded: dict[int, np.ndarray] = {}
             current_idx = 0
             max_wanted_idx = int(target_indices.max())
 
@@ -217,11 +222,11 @@ class DAiSEEDataset(Dataset):
                 current_idx += 1
 
             if not decoded:
-                raise IOError(f"Failed to decode any frames from: {video_path}")
+                raise OSError(f"Failed to decode any frames from: {video_path}")
 
             # Fill any gaps (e.g. truncated video) by forward-filling the last
             # successfully decoded frame, so we always return exactly num_frames.
-            frames: List[np.ndarray] = []
+            frames: list[np.ndarray] = []
             last_valid = None
             for idx in target_indices:
                 if idx in decoded:
@@ -244,7 +249,7 @@ class DAiSEEDataset(Dataset):
     def __len__(self) -> int:
         return len(self.samples)
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         start_idx = idx
         for attempt in range(self.max_load_retries):
             video_path, label_tensor = self.samples[idx]

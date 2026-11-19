@@ -5,11 +5,13 @@ Derives the single "Focus Score / 10" metric shown in the Patient Portal's
 Live AI Observer card from the model's four raw regression outputs
 (Boredom, Engagement, Confusion, Frustration).
 
-The raw model outputs are regression values that *should* sit roughly in
-[0, 1] (they were trained against DAiSEE's normalized affect labels), but
-because this is a regression head (not a softmax), nothing guarantees the
-output stays in range for out-of-distribution frames -- so every value is
-clamped defensively before it's used.
+Inputs are the engine's [0, 1] values: the v2 model regresses DAiSEE's 0-3
+levels and inference_engine.py divides by 3. A regression head can still
+leave that range on out-of-distribution frames, so every value is clamped
+defensively before it's used.
+
+Note: the weights below are a hand-chosen product heuristic, not learned
+or validated against any outcome.
 
 Formula
 -------
@@ -27,6 +29,8 @@ kept purely as a defensive guard.
 
 from __future__ import annotations
 
+import math
+
 ENGAGEMENT_WEIGHT = 0.50
 BOREDOM_WEIGHT = 0.25
 CONFUSION_WEIGHT = 0.15
@@ -34,7 +38,7 @@ FRUSTRATION_WEIGHT = 0.10
 
 
 def _clamp01(value: float) -> float:
-    if value != value:  # NaN check without importing math
+    if math.isnan(value):
         return 0.0
     return max(0.0, min(1.0, float(value)))
 

@@ -1,17 +1,15 @@
 # infra/ci
 
-The real, active workflow GitHub runs is `.github/workflows/ci.yml` — GitHub
-Actions only picks up workflows from that exact path, so that's the one
-that actually executes on push/PR.
+The CI pipeline lives at the repository root, in [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml). That is the only path GitHub Actions reads.
 
-`github-actions.yml` in this folder is an identical copy kept here for
-discoverability alongside the rest of `infra/`. If you edit the pipeline,
-edit `.github/workflows/ci.yml` and copy the change here (or symlink it)
-so the two don't drift.
+## Jobs
 
-## What it does
+| Job | What it runs |
+|---|---|
+| `ml-engine` | Lint and metric unit tests for `FrontalOS_Engine/` |
+| `frontalos-engine` | Lint and tests for the real-time service: demo-mode fallback, temporal buffer, intervention policy, WebSocket |
+| `cortix-api` | Lint and pytest for the backend |
+| `web` | ESLint, TypeScript type-check, and Vitest |
+| `docker-build` | Builds all three images on pushes to `main`. Nothing is deployed. |
 
-Three independent jobs (`web`, `cortix-api`, `frontalos-engine`) run lint,
-type-check, and tests in parallel; a fourth (`docker-build`) then builds
-all three Docker images to confirm the repo is always in a working state.
-Nothing deploys anywhere.
+Security scanning runs in a separate workflow, [`.github/workflows/codeql.yml`](../../../.github/workflows/codeql.yml).

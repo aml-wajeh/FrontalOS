@@ -19,28 +19,30 @@ or the weights file present.
 
 from __future__ import annotations
 
-import collections
 import logging
 import math
 import random
 import threading
 import time
-from dataclasses import dataclass, field
-from typing import Deque, Dict, List, Optional
+from dataclasses import dataclass
 
 import numpy as np
 
-from .model import FRAME_SIZE, LABEL_NAMES, NUM_FRAMES
+from .model import FRAME_SIZE, LABEL_MAX, NUM_FRAMES, model_version
+from .temporal_buffer import TemporalFrameBuffer
 
 logger = logging.getLogger("frontalos_engine.inference")
 
 IDLE_TIMEOUT_SECONDS = 60.0
+# The model scores a ~10 s window; re-scoring it more than once a second adds
+# GPU load without new information.
+INFERENCE_INTERVAL_SECONDS = 1.0
 CLEANUP_INTERVAL_SECONDS = 30.0
 
 
 @dataclass
 class PredictionResult:
-    values: List[float]  # [boredom, engagement, confusion, frustration]
+    values: list[float]  # [boredom, engagement, confusion, frustration]
     inference_mode: str  # "model" | "demo"
 
 
@@ -57,9 +59,12 @@ class InferenceEngine:
         self.device = device
         self.demo_mode = not model_status_loaded
 
-        self.buffer: Deque[np.ndarray] = collections.deque(maxlen=NUM_FRAMES)
+        # v2: time-windowed buffer sampled like the training clips (see
+        # temporal_buffer.py), replacing v1's last-16-consecutive-frames deque.
+        self.buffer = TemporalFrameBuffer(num_frames=NUM_FRAMES, resize_to=FRAME_SIZE)
+        self._last_inference = 0.0
         self.lock = threading.Lock()
-        self.latest_result: Optional[PredictionResult] = None
+        self.latest_result: PredictionResult | None = None
         self.running = True
         self.last_activity = time.time()
 
@@ -72,11 +77,11 @@ class InferenceEngine:
 
     def push_frame(self, frame_bgr: np.ndarray) -> None:
         with self.lock:
-            self.buffer.append(frame_bgr.copy())
+            self.buffer.push(frame_bgr)
             self.last_activity = time.time()
         self.new_frame_event.set()
 
-    def get_latest_result(self) -> Optional[PredictionResult]:
+    def get_latest_result(self) -> PredictionResult | None:
         with self.lock:
             return self.latest_result
 
@@ -85,14 +90,14 @@ class InferenceEngine:
         self.new_frame_event.set()
         self.thread.join(timeout=1.0)
 
-    def is_idle(self, now: Optional[float] = None) -> bool:
+    def is_idle(self, now: float | None = None) -> bool:
         now = now if now is not None else time.time()
         with self.lock:
             return (now - self.last_activity) > IDLE_TIMEOUT_SECONDS
 
     # -- internal -----------------------------------------------------
 
-    def _preprocess(self, frames: List[np.ndarray]):
+    def _preprocess(self, frames: list[np.ndarray]):
         import cv2
         import torch
 
@@ -106,7 +111,7 @@ class InferenceEngine:
         tensor = torch.from_numpy(clip).permute(3, 0, 1, 2).unsqueeze(0)  # (1, C, T, H, W)
         return tensor.to(self.device, non_blocking=True)
 
-    def _run_model_inference(self, frames_snapshot: List[np.ndarray]) -> Optional[List[float]]:
+    def _run_model_inference(self, frames_snapshot: list[np.ndarray]) -> list[float] | None:
         import torch
 
         try:
@@ -117,12 +122,16 @@ class InferenceEngine:
                         output = self.model(input_tensor)
                 else:
                     output = self.model(input_tensor)
-            return output.squeeze(0).float().cpu().numpy().tolist()
-        except Exception:  # noqa: BLE001
+            raw = output.squeeze(0).float().cpu().numpy()
+            if model_version() == "v2":
+                # v2 regresses DAiSEE levels 0..3; the API reports [0, 1].
+                raw = np.clip(raw / LABEL_MAX, 0.0, 1.0)
+            return raw.tolist()
+        except Exception:
             logger.exception("Inference error (frame skipped)")
             return None
 
-    def _demo_values(self) -> List[float]:
+    def _demo_values(self) -> list[float]:
         """Smooth, slowly-drifting synthetic signal for demo mode."""
         self._demo_tick += 1
         t = self._demo_tick * 0.08 + self._demo_phase
@@ -152,10 +161,13 @@ class InferenceEngine:
             self.new_frame_event.wait(timeout=0.1)
             self.new_frame_event.clear()
 
+            if time.monotonic() - self._last_inference < INFERENCE_INTERVAL_SECONDS:
+                continue
             with self.lock:
-                if len(self.buffer) < NUM_FRAMES:
-                    continue
-                frames_snapshot = list(self.buffer)
+                frames_snapshot = self.buffer.sample()
+            if frames_snapshot is None:
+                continue  # still warming up: the window is not full yet
+            self._last_inference = time.monotonic()
 
             predictions = self._run_model_inference(frames_snapshot)
             if predictions is not None:
@@ -170,7 +182,7 @@ class SessionManager:
         self.model = model
         self.device = device
         self.model_loaded = model_loaded
-        self._sessions: Dict[str, InferenceEngine] = {}
+        self._sessions: dict[str, InferenceEngine] = {}
         self._lock = threading.Lock()
         self._cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
         self._cleanup_thread.start()

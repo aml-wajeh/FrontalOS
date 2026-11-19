@@ -1,0 +1,14 @@
+Copyright (c) 2026 Aml Wajeh. All rights reserved.
+
+This repository is published for portfolio and evaluation purposes only.
+
+You may view and read the source code on GitHub. No other permission is
+granted: you may not copy, modify, distribute, sublicense, or use this code
+or the trained model weights, in whole or in part, for any purpose, without
+prior written permission from the copyright holder.
+
+The DAiSEE dataset is not included and remains subject to its own license.
+Third-party libraries used by this project are subject to their own licenses.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. It is a
+research prototype and is not a medical or diagnostic device.

@@ -1,3 +1,5 @@
+import math
+
 from app.core.focus_score import compute_focus_score
 
 
@@ -32,5 +34,5 @@ def test_nan_input_is_treated_as_zero_not_propagated():
     score = compute_focus_score(boredom=float("nan"), engagement=0.5, confusion=0.0, frustration=0.0)
     # NaN boredom clamps to 0.0 -> contributes its full (1 - 0) weight, and
     # the result must be a real, in-range number (no NaN leaking to the client).
-    assert score == score  # not NaN
+    assert not math.isnan(score)
     assert 0.0 <= score <= 10.0

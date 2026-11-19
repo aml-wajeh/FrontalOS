@@ -42,3 +42,6 @@ Thumbs.db
 
 # Claude Code local settings
 .claude/
+
+# Run logs (results are kept as .md/.json/.csv)
+FrontalOS_Engine/results/*.log

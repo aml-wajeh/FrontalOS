@@ -16,34 +16,40 @@ Optimized for a single RTX 3050 (4GB VRAM):
 from __future__ import annotations
 
 import copy
+import json
+import random
 import time
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.nn as nn
+from pytorchvideo.models.hub import x3d_xs
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 
-from pytorchvideo.models.hub import x3d_xs
-
-from dataset_loader import DAiSEEDataset
+from dataset_loader import DAiSEEDataset, default_root
 
 # --------------------------------------------------------------------------- #
 # Configuration
 # --------------------------------------------------------------------------- #
-DATASET_ROOT = r"D:\ADHD_FINAL_PROJECT\Dataset"
+DATASET_ROOT = default_root()  # $DAISEE_ROOT, or ./DataSet next to this file
 
 BATCH_SIZE = 2                 # physical batch size actually sent to the GPU
 ACCUMULATION_STEPS = 8         # effective batch size = BATCH_SIZE * ACCUMULATION_STEPS = 16
-NUM_WORKERS = 2                # keep low; raise only if I/O bound and RAM allows
-EPOCHS = 30
+NUM_WORKERS = 4                # video decoding is the bottleneck
+EPOCHS = 15
+EARLY_STOP_PATIENCE = 4        # stop after this many epochs without val improvement
 LEARNING_RATE = 1e-4
 WEIGHT_DECAY = 1e-4
 GRAD_CLIP_NORM = 1.0
 NUM_LABELS = 4                 # Boredom, Engagement, Confusion, Frustration
+SEED = 42
 
-SAVE_PATH = Path("frontal_x3d_model.pth")
+HERE = Path(__file__).resolve().parent
+SAVE_PATH = HERE / "frontal_x3d_v2.pth"          # v1 weights stay in frontal_x3d_model.pth
+HISTORY_PATH = HERE / "results" / "train_history_v2.json"
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -51,23 +57,46 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # --------------------------------------------------------------------------- #
 # Model construction
 # --------------------------------------------------------------------------- #
-def build_model(num_labels: int = NUM_LABELS) -> nn.Module:
-    """
-    Loads the pretrained X3D-XS backbone (Kinetics-400) and swaps the final
-    classification projection layer for a 4-output regression head.
+# Kinetics-400 statistics the pretrained X3D backbone was trained with.
+KINETICS_MEAN = (0.45, 0.45, 0.45)
+KINETICS_STD = (0.225, 0.225, 0.225)
 
-    X3D's head (ResNetBasicHead) ends with a global adaptive average pool
-    over (T, H, W) before the linear projection, so it is agnostic to the
-    exact number of input frames (16 in our case) -- no architecture surgery
-    beyond the final Linear layer is required.
-    """
-    model = x3d_xs(pretrained=True)
 
-    # The final block of an X3D `Net` is the head; its `proj` attribute is
-    # the nn.Linear mapping pooled features -> class logits (400 for Kinetics).
+def _normalize_input(module: nn.Module, args: tuple) -> tuple:
+    """Forward pre-hook: maps [0, 1] RGB clips to Kinetics-normalized input.
+    Living inside the model means training, evaluation and live inference
+    can never disagree about preprocessing."""
+    x = args[0]
+    mean = x.new_tensor(KINETICS_MEAN).view(1, 3, 1, 1, 1)
+    std = x.new_tensor(KINETICS_STD).view(1, 3, 1, 1, 1)
+    return ((x - mean) / std,) + tuple(args[1:])
+
+
+def build_model(num_labels: int = NUM_LABELS, legacy_v1: bool = False, pretrained: bool = True) -> nn.Module:
+    """
+    X3D-XS backbone (Kinetics-400 pretrained) with a 4-output regression head.
+
+    v2 fixes two defects of the v1 model:
+      1. pytorchvideo's X3D head ends in `Softmax(dim=1)`. v1 kept it, so the
+         four "regression" outputs were forced to sum to 1 and could never
+         reach DAiSEE's 0-3 label range. v2 removes the activation.
+      2. v1 fed [0, 1] pixels without the Kinetics mean/std the backbone was
+         pretrained on. v2 normalizes inside the model (forward pre-hook).
+
+    `legacy_v1=True` rebuilds the original v1 network exactly, so the v1
+    checkpoint can still be evaluated as it was trained.
+    """
+    model = x3d_xs(pretrained=pretrained)
+
+    # The final block of an X3D `Net` is the head; `proj` maps pooled
+    # features -> 400 Kinetics logits. Replace it with a 4-output head.
     head = model.blocks[-1]
     in_features = head.proj.in_features
     head.proj = nn.Linear(in_features, num_labels)
+
+    if not legacy_v1:
+        head.activation = None
+        model.register_forward_pre_hook(_normalize_input)
 
     return model
 
@@ -132,6 +161,9 @@ def run_epoch(
 # Main
 # --------------------------------------------------------------------------- #
 def main() -> None:
+    torch.manual_seed(SEED)
+    random.seed(SEED)
+    np.random.seed(SEED)
     print(f"Device: {DEVICE}")
     if DEVICE.type == "cuda":
         print(f"GPU: {torch.cuda.get_device_name(0)}")
@@ -166,6 +198,9 @@ def main() -> None:
 
     best_val_loss = float("inf")
     best_state_dict = None
+    epochs_without_improvement = 0
+    history: list[dict] = []
+    HISTORY_PATH.parent.mkdir(exist_ok=True)
 
     print(
         f"Physical batch size: {BATCH_SIZE} | Accumulation steps: {ACCUMULATION_STEPS} "
@@ -198,11 +233,21 @@ def main() -> None:
             f"LR: {current_lr:.2e} | Time: {elapsed:.1f}s"
         )
 
+        history.append({"epoch": epoch, "train_mse": train_loss, "val_mse": val_loss,
+                        "lr": current_lr, "seconds": round(elapsed, 1)})
+        HISTORY_PATH.write_text(json.dumps(history, indent=2), encoding="utf-8")
+
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             best_state_dict = copy.deepcopy(model.state_dict())
             torch.save(best_state_dict, SAVE_PATH)
+            epochs_without_improvement = 0
             print(f"  -> New best model saved to '{SAVE_PATH}' (Val MSE: {best_val_loss:.4f})")
+        else:
+            epochs_without_improvement += 1
+            if epochs_without_improvement >= EARLY_STOP_PATIENCE:
+                print(f"Early stopping: no val improvement for {EARLY_STOP_PATIENCE} epochs.")
+                break
 
         if DEVICE.type == "cuda":
             torch.cuda.empty_cache()

@@ -34,6 +34,7 @@ def make_synthetic_jpeg_b64(width: int = 320, height: int = 240, seed: int = 0) 
     """A synthetic frame encoded exactly like the browser client would
     encode a webcam frame before sending it over the WebSocket."""
     import base64
+
     import cv2
 
     frame = make_synthetic_frame(width, height, seed)

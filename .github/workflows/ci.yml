@@ -1,0 +1,116 @@
+name: CI
+
+# Lint + tests for every part of the repo on each push and PR.
+# Nothing is deployed from here.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ml-engine:
+    name: FrontalOS_Engine (ML) — lint, metric tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: FrontalOS_Engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # Training/eval need torch + the DAiSEE videos, which CI does not have;
+      # the metric code those results depend on is tested here.
+      - run: pip install numpy==1.26.4 pytest==8.3.3 ruff==0.17.5
+      - run: ruff check .
+      - run: pytest -q
+
+  frontalos-engine:
+    name: frontalos-engine (real-time service) — lint, tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontalos-platform/services/frontalos-engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: frontalos-platform/services/frontalos-engine/requirements-dev.txt
+      # requirements-dev.txt omits torch on purpose: tests run the documented
+      # demo-mode fallback, plus the pure-Python buffer and policy logic.
+      - run: pip install -r requirements-dev.txt ruff==0.17.5
+      - run: ruff check . --exclude reference
+      - run: pytest -q
+
+  cortix-api:
+    name: cortix-api (backend) — lint, tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontalos-platform/services/cortix-api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: frontalos-platform/services/cortix-api/requirements.txt
+      - run: pip install -r requirements.txt ruff==0.17.5
+      - run: ruff check . --exclude reference
+      - run: pytest -q
+
+  web:
+    name: web (Next.js) — lint, type-check, unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontalos-platform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontalos-platform/package-lock.json
+      - run: npm ci
+      - run: npm run lint:web
+      - run: npx tsc --noEmit -p tsconfig.json
+        working-directory: frontalos-platform/apps/web
+      - run: npx vitest run
+        working-directory: frontalos-platform/apps/web
+
+  docker-build:
+    name: Docker images build
+    if: github.event_name == 'push'
+    needs: [frontalos-engine, cortix-api, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: frontalos-platform
+          file: frontalos-platform/apps/web/Dockerfile
+          push: false
+          build-args: |
+            NEXT_PUBLIC_CORTIX_API_URL=http://localhost:8000
+            NEXT_PUBLIC_FRONTALOS_WS_URL=ws://localhost:8001
+      - uses: docker/build-push-action@v6
+        with:
+          context: frontalos-platform/services/cortix-api
+          target: prod
+          push: false
+      - uses: docker/build-push-action@v6
+        with:
+          context: frontalos-platform/services/frontalos-engine
+          push: false
