@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
 COPY models/ ./models/
 
-ENV FRONTALOS_MODEL_PATH=./models/frontal_x3d_model.pth
+ENV FRONTALOS_MODEL_PATH=./models/frontal_x3d_v2.pth
 ENV PORT=8000
 
 EXPOSE 8000

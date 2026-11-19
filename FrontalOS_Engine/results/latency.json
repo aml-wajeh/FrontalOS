@@ -1,0 +1,23 @@
+{
+  "model": "X3D-XS (v2 head)",
+  "input": "1 x 3 x 16 x 224 x 224",
+  "parameters": 2982870,
+  "torch": "2.5.1+cu121",
+  "cpu": "Intel64 Family 6 Model 158 Stepping 10, GenuineIntel",
+  "results": {
+    "cuda_fp16_autocast": {
+      "runs": 200,
+      "p50_ms": 64.2,
+      "p95_ms": 73.9,
+      "mean_ms": 64.6
+    },
+    "cpu_fp32": {
+      "runs": 30,
+      "p50_ms": 469.8,
+      "p95_ms": 505.1,
+      "mean_ms": 472.9
+    }
+  },
+  "gpu": "Quadro P2000 with Max-Q Design",
+  "cpu_threads": 6
+}
