@@ -12,6 +12,10 @@ docs/MODELS_README.md's "how to actually make Model 1 live" section
 rather than a silent, unnoticed change in behavior.
 """
 
+from pathlib import Path
+
+TABULAR_PKL = Path(__file__).resolve().parents[1] / "models" / "adhd_model_pca_no_outliers_tuned.pkl"
+
 
 def test_health_reports_ai_model_modes_and_load_errors(client):
     resp = client.get("/health")
@@ -27,8 +31,11 @@ def test_health_reports_ai_model_modes_and_load_errors(client):
     assert body["ai_models"]["imaging"] == "demo"
     assert body["ai_model_load_errors"]["imaging"] is None
 
-    # Tabular: the .pkl DOES ship but doesn't currently load — demo mode,
-    # with the specific reason surfaced rather than hidden.
+    # Tabular: demo mode either way. The .pkl is not part of the public repo
+    # (it is the diagnostic model, trained separately); when a local copy is
+    # present it fails to load and the specific reason must be surfaced.
     assert body["ai_models"]["tabular"] == "demo"
-    assert body["ai_model_load_errors"]["tabular"] is not None
-    assert "V3Ensemble" in body["ai_model_load_errors"]["tabular"]
+    if TABULAR_PKL.exists():
+        assert "V3Ensemble" in body["ai_model_load_errors"]["tabular"]
+    else:
+        assert body["ai_model_load_errors"]["tabular"] is None
